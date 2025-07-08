@@ -50,17 +50,5 @@ SCN_SECRET # whatever you like(for security reason)
 - After a while, you will see the deployment-url in Annotations.
 - CNAME deployment-url to your domain if you like.(optional)
 
-## 👀 Roadmap
-
-- [x] ~~password protection.~~
-- [x] ~~support URL/Image (Markdown mode).~~
-- [x] ~~read only mode (share link).~~
-- [x] ~~show last modify date.~~
-
-## ☕ Donate
-
-maybe, buy me a coffee?
-
-<a href="https://www.buymeacoffee.com/s0urce" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png" alt="Buy Me A Coffee" style="height: auto !important;width: auto !important;" ></a>
-
-[https://src.moe/donate](https://src.moe/donate)
+## Free Resource is the Best
+I will add more setting.(e.g. add more metadata in the list)
