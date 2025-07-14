@@ -64,8 +64,8 @@ export async function checkAuth(cookie, path, secret) {
     return false
 }
 
-export async function queryNote(key) {
-    const result = await NOTES.getWithMetadata(key)
+export async function queryNote(key, notes) {
+    const result = await notes.getWithMetadata(key)
     return {
         value: result.value || '',
         metadata: result.metadata || {},

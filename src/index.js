@@ -97,7 +97,7 @@ router.post('/purge', async (request) => {
                 if (key.name.startsWith('PURGE_')) {
                     continue
                 }
-                const { value, metadata } = await queryNote(key.name)
+                const { value, metadata } = await queryNote(key.name, NOTES)
                 // Avoid re-marking
                 if (!metadata.marked_for_deletion) {
                     markPromises.push(
@@ -180,7 +180,7 @@ router.get('/share/:md5', async (request) => {
     const path = await SHARE.get(md5)
 
     if (!!path) {
-        const { value, metadata } = await queryNote(path)
+        const { value, metadata } = await queryNote(path, NOTES)
 
         return returnPage('Share', {
             lang,
@@ -201,7 +201,7 @@ router.get('/:path', async (request) => {
 
     const cookie = Cookies.parse(request.headers.get('Cookie') || '')
 
-    const { value, metadata } = await queryNote(path)
+    const { value, metadata } = await queryNote(path, NOTES)
 
     if (!metadata.pw) {
         return returnPage('Edit', {
@@ -230,7 +230,7 @@ router.post('/:path/auth', async request => {
     if (request.headers.get('Content-Type') === 'application/json') {
         const { passwd } = await request.json()
 
-        const { metadata } = await queryNote(path)
+        const { metadata } = await queryNote(path, NOTES)
 
         if (metadata.pw) {
             const storePw = await saltPw(passwd, SALT)
@@ -259,7 +259,7 @@ router.post('/:path/pw', async request => {
         const cookie = Cookies.parse(request.headers.get('Cookie') || '')
         const { passwd } = await request.json()
 
-        const { value, metadata } = await queryNote(path)
+        const { value, metadata } = await queryNote(path, NOTES)
         const valid = await checkAuth(cookie, path, SECRET)
 
         if (!metadata.pw || valid) {
@@ -294,7 +294,7 @@ router.post('/:path/setting', async request => {
         const cookie = Cookies.parse(request.headers.get('Cookie') || '')
         const { mode, share } = await request.json()
 
-        const { value, metadata } = await queryNote(path)
+        const { value, metadata } = await queryNote(path, NOTES)
         const valid = await checkAuth(cookie, path, SECRET)
 
         if (!metadata.pw || valid) {
@@ -329,7 +329,7 @@ router.post('/:path/setting', async request => {
 
 router.post('/:path', async request => {
     const { path } = request.params
-    const { value, metadata } = await queryNote(path)
+    const { value, metadata } = await queryNote(path, NOTES)
 
     const cookie = Cookies.parse(request.headers.get('Cookie') || '')
     const valid = await checkAuth(cookie, path, SECRET)
