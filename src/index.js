@@ -4,9 +4,10 @@ import { Router } from 'itty-router'
 import Cookies from 'cookie'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { queryNote, MD5, checkAuth, genRandomStr, returnPage, returnJSON, saltPw, getI18n } from './helper'
-import { SECRET } from './constant'
 
 dayjs.extend(utc)
+
+let NOTES, SHARE, SECRET
 
 // init
 const router = Router()
@@ -211,7 +212,7 @@ router.get('/:path', async (request) => {
         })
     }
 
-    const valid = await checkAuth(cookie, path)
+    const valid = await checkAuth(cookie, path, SECRET)
     if (valid) {
         return returnPage('Edit', {
             lang,
@@ -259,7 +260,7 @@ router.post('/:path/pw', async request => {
         const { passwd } = await request.json()
 
         const { value, metadata } = await queryNote(path)
-        const valid = await checkAuth(cookie, path)
+        const valid = await checkAuth(cookie, path, SECRET)
 
         if (!metadata.pw || valid) {
             const pw = passwd ? await saltPw(passwd) : undefined
@@ -294,7 +295,7 @@ router.post('/:path/setting', async request => {
         const { mode, share } = await request.json()
 
         const { value, metadata } = await queryNote(path)
-        const valid = await checkAuth(cookie, path)
+        const valid = await checkAuth(cookie, path, SECRET)
 
         if (!metadata.pw || valid) {
             try {
@@ -331,7 +332,7 @@ router.post('/:path', async request => {
     const { value, metadata } = await queryNote(path)
 
     const cookie = Cookies.parse(request.headers.get('Cookie') || '')
-    const valid = await checkAuth(cookie, path)
+    const valid = await checkAuth(cookie, path, SECRET)
 
     if (!metadata.pw || valid) {
         // OK
@@ -381,6 +382,8 @@ export default {
     },
     async scheduled(event, env, ctx) {
         NOTES = env.NOTES
+        SHARE = env.SHARE
+        SECRET = env.SCN_SECRET
         console.log(`Cron[${event.cron}] triggered: Starting deletion sweep.`)
 
         let deletedCount = 0

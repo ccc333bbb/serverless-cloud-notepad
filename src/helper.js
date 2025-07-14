@@ -1,6 +1,6 @@
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import * as TEMPL from './template'
-import { SALT, SECRET, SUPPORTED_LANG } from './constant'
+import { SALT, SUPPORTED_LANG } from './constant'
 
 // generate random string
 export const genRandomStr = n => {
@@ -52,14 +52,13 @@ export async function saltPw(password) {
     return await MD5(`${hashPw}+${SALT}`)
 }
 
-export async function checkAuth(cookie, path) {
-    if (cookie.auth) {
-        const valid = await jwt.verify(cookie.auth, SECRET)
-        if (valid) {
-            const payload = jwt.decode(cookie.auth)
-            if (payload.path === path) {
-                return true
-            }
+export async function checkAuth(cookie, path, secret) {
+    if (cookie && cookie.auth) {
+        try {
+            const { payload } = await jwt.verify(cookie.auth, secret)
+            return payload && payload.path === path
+        } catch (error) {
+            console.log(error)
         }
     }
     return false
