@@ -4,12 +4,11 @@
   "author": "s0urce",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "2.0.5"
+    "wrangler": "^3.63.0"
   },
   "private": true,
   "scripts": {
-    "start": "wrangler dev",
-    "publish": "wrangler publish"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "@tsndr/cloudflare-worker-jwt": "^1.1.7",
