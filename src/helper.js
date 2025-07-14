@@ -1,6 +1,6 @@
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import * as TEMPL from './template'
-import { SALT, SUPPORTED_LANG } from './constant'
+import { SUPPORTED_LANG } from './constant'
 
 // generate random string
 export const genRandomStr = n => {
@@ -47,9 +47,9 @@ export async function MD5(str) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-export async function saltPw(password) {
+export async function saltPw(password, salt) {
     const hashPw = await MD5(password)
-    return await MD5(`${hashPw}+${SALT}`)
+    return await MD5(`${hashPw}+${salt}`)
 }
 
 export async function checkAuth(cookie, path, secret) {

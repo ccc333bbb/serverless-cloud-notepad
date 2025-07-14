@@ -7,7 +7,7 @@ import { queryNote, MD5, checkAuth, genRandomStr, returnPage, returnJSON, saltPw
 
 dayjs.extend(utc)
 
-let NOTES, SHARE, SECRET
+let NOTES, SHARE, SECRET, SALT
 
 // init
 const router = Router()
@@ -233,7 +233,7 @@ router.post('/:path/auth', async request => {
         const { metadata } = await queryNote(path)
 
         if (metadata.pw) {
-            const storePw = await saltPw(passwd)
+            const storePw = await saltPw(passwd, SALT)
 
             if (metadata.pw === storePw) {
                 const token = await jwt.sign({ path }, SECRET)
@@ -263,7 +263,7 @@ router.post('/:path/pw', async request => {
         const valid = await checkAuth(cookie, path, SECRET)
 
         if (!metadata.pw || valid) {
-            const pw = passwd ? await saltPw(passwd) : undefined
+            const pw = passwd ? await saltPw(passwd, SALT) : undefined
             try {
                 await NOTES.put(path, value, {
                     metadata: {
@@ -377,13 +377,16 @@ export default {
         NOTES = env.NOTES
         SHARE = env.SHARE
         SECRET = env.SCN_SECRET
+        SALT = env.SCN_SALT
 
         return router.handle(request)
     },
     async scheduled(event, env, ctx) {
+        // bind env
         NOTES = env.NOTES
         SHARE = env.SHARE
         SECRET = env.SCN_SECRET
+        SALT = env.SCN_SALT
         console.log(`Cron[${event.cron}] triggered: Starting deletion sweep.`)
 
         let deletedCount = 0
