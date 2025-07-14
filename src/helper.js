@@ -55,8 +55,11 @@ export async function saltPw(password, salt) {
 export async function checkAuth(cookie, path, secret) {
     if (cookie && cookie.auth) {
         try {
-            const { payload } = await jwt.verify(cookie.auth, secret)
-            return payload && payload.path === path
+            const valid = await jwt.verify(cookie.auth, secret)
+            if (valid) {
+                const { payload } = jwt.decode(cookie.auth)
+                return payload && payload.path === path
+            }
         } catch (error) {
             console.log(error)
         }
