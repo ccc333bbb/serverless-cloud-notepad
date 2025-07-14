@@ -1,9 +1,12 @@
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
 import { Router } from 'itty-router'
 import Cookies from 'cookie'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { queryNote, MD5, checkAuth, genRandomStr, returnPage, returnJSON, saltPw, getI18n } from './helper'
 import { SECRET } from './constant'
+
+dayjs.extend(utc)
 
 // init
 const router = Router()
@@ -13,6 +16,111 @@ router.get('/', ({ url }) => {
     // redirect to new page
     return Response.redirect(`${url}${newHash}`, 302)
 })
+
+// Purge Page
+const renderPurgePage = (message = '') => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Purge All Notes</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
+            .container { max-width: 400px; margin: 0 auto; }
+            .message { padding: 10px; margin-bottom: 15px; border-radius: 5px; }
+            .message.success { background-color: #d4edda; color: #155724; }
+            .message.error { background-color: #f8d7da; color: #721c24; }
+            input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+            button { padding: 10px 15px; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Purge All Notes</h1>
+            ${message}
+            <form method="POST" action="/purge">
+                <label for="purgeKey">Enter Purge Key (Format: YYYYMMDDHHMM in UTC):</label>
+                <input type="text" id="purgeKey" name="purgeKey" required>
+                <button type="submit">Purge</button>
+            </form>
+          </div>
+        </body>
+      </html>`
+    return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } })
+}
+
+router.get('/purge', () => {
+    return renderPurgePage()
+})
+
+router.post('/purge', async (request) => {
+    const ip = request.headers.get('cf-connecting-ip') || 'unknown'
+    const lockKey = `PURGE_LOCK_${ip}`
+    const failKey = `PURGE_FAIL_COUNT_${ip}`
+
+    // 1. Check if locked
+    const isLocked = await NOTES.get(lockKey)
+    if (isLocked) {
+        return renderPurgePage('<div class="message error">Too many failed attempts. Please try again in 15 minutes.</div>')
+    }
+
+    // 2. Validate password
+    const formData = await request.formData()
+    const userInput = formData.get('purgeKey')
+    const correctKey = dayjs.utc().format('YYYYMMDDHHMM')
+
+    if (userInput !== correctKey) {
+        const failCount = parseInt(await NOTES.get(failKey) || '0') + 1
+        if (failCount >= 3) {
+            await NOTES.put(lockKey, 'locked', { expirationTtl: 900 }) // Lock for 15 mins
+            await NOTES.delete(failKey)
+        } else {
+            await NOTES.put(failKey, failCount.toString(), { expirationTtl: 900 })
+        }
+        return renderPurgePage('<div class="message error">Invalid purge key.</div>')
+    }
+
+    // 3. On success, reset counters and start marking
+    await NOTES.delete(failKey)
+
+    let markedCount = 0
+    let cursor = undefined
+    try {
+        do {
+            const listResult = await NOTES.list({ cursor })
+            const markPromises = []
+
+            for (const key of listResult.keys) {
+                // Avoid marking internal keys
+                if (key.name.startsWith('PURGE_')) {
+                    continue
+                }
+                const { value, metadata } = await queryNote(key.name)
+                // Avoid re-marking
+                if (!metadata.marked_for_deletion) {
+                    markPromises.push(
+                        NOTES.put(key.name, value, {
+                            metadata: {
+                                ...metadata,
+                                marked_for_deletion: true,
+                            },
+                        })
+                    )
+                    markedCount++
+                }
+            }
+            await Promise.all(markPromises)
+            cursor = listResult.list_complete ? undefined : listResult.cursor
+        } while (cursor)
+    } catch (err) {
+        console.error('Purge marking failed:', err)
+        return renderPurgePage(`<div class="message error">An error occurred while marking notes for deletion. Details: ${err.message}</div>`)
+    }
+
+    return renderPurgePage(`<div class="message success">Purge process initiated. ${markedCount} notes have been marked for deletion and will be removed shortly.</div>`)
+})
+
 
 // 处理 /list 路由
 router.get('/list', async () => {
@@ -262,6 +370,40 @@ router.all('*', (request) => {
     returnPage('Page404', { lang, title: '404' })
 })
 
-addEventListener('fetch', event => {
-    event.respondWith(router.handle(event.request))
-})
+export default {
+    async fetch(request, env, ctx) {
+        // bind env
+        NOTES = env.NOTES
+        SHARE = env.SHARE
+        SECRET = env.SCN_SECRET
+
+        return router.handle(request)
+    },
+    async scheduled(event, env, ctx) {
+        NOTES = env.NOTES
+        console.log(`Cron[${event.cron}] triggered: Starting deletion sweep.`)
+
+        let deletedCount = 0
+        let cursor = undefined
+        try {
+            do {
+                const listResult = await NOTES.list({ limit: 100, cursor })
+                const keysToDelete = listResult.keys
+                    .filter(key => key.metadata?.marked_for_deletion)
+                    .map(key => key.name)
+
+                if (keysToDelete.length > 0) {
+                    // Cloudflare KV does not support batch delete, must delete one by one
+                    const deletePromises = keysToDelete.map(keyName => NOTES.delete(keyName))
+                    await Promise.all(deletePromises)
+                    deletedCount += keysToDelete.length
+                }
+
+                cursor = listResult.list_complete ? undefined : listResult.cursor
+            } while (cursor)
+            console.log(`Deletion sweep completed. ${deletedCount} notes deleted.`)
+        } catch (err) {
+            console.error('Scheduled deletion failed:', err)
+        }
+    }
+}
