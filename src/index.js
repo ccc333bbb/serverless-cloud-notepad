@@ -1,11 +1,13 @@
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
 import { Router } from 'itty-router'
 import Cookies from 'cookie'
 import jwt from '@tsndr/cloudflare-worker-jwt'
 import { queryNote, MD5, checkAuth, genRandomStr, returnPage, returnJSON, saltPw, getI18n } from './helper'
 
 dayjs.extend(utc)
+dayjs.extend(timezone)
 
 let NOTES, SHARE, SECRET, SALT
 
@@ -41,8 +43,7 @@ const renderPurgePage = (message = '') => {
             <h1>Purge All Notes</h1>
             ${message}
             <form method="POST" action="/purge">
-                <label for="purgeKey">Enter Purge Key (Format: YYYYMMDDHHMM in UTC):</label>
-                <input type="text" id="purgeKey" name="purgeKey" required>
+                <input type="text" id="purgeKey" name="purgeKey" placeholder="Enter purge key" required>
                 <button type="submit">Purge</button>
             </form>
           </div>
@@ -69,7 +70,7 @@ router.post('/purge', async (request) => {
     // 2. Validate password
     const formData = await request.formData()
     const userInput = formData.get('purgeKey')
-    const correctKey = dayjs.utc().format('YYYYMMDDHHMM')
+    const correctKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
 
     if (userInput !== correctKey) {
         const failCount = parseInt(await NOTES.get(failKey) || '0') + 1
