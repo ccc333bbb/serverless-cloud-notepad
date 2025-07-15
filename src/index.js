@@ -56,6 +56,12 @@ const renderPurgePage = (message = '', hashKey = '', dateStr = '') => {
 }
 
 router.get('/purge', async () => {
+    // 檢查是否有正在進行的 purge 操作
+    const purgeStatus = await NOTES.get('PURGE_STATUS')
+    if (purgeStatus === 'in_progress') {
+        return renderPurgePage('<div class="message error">Purge operation is already in progress. Please wait for it to complete.</div>', '', '')
+    }
+    
     // 生成 hashkey 並存儲於 KV，5 分鐘有效
     const now = dayjs().utc().add(8, 'hour')
     const dateStr = now.format('YYYYMMDD')
@@ -135,7 +141,8 @@ router.post('/purge', async (request) => {
         const dateStr = now.format('YYYYMMDD')
         return renderPurgePage('<div class="message error">Invalid purge key.</div>', hashKey, dateStr)
     }
-    // 驗證通過後刪除 hashkey
+    // 驗證通過後設置 purge 狀態為進行中
+    await NOTES.put('PURGE_STATUS', 'in_progress', { expirationTtl: 600 }) // 10分鐘後自動清除
     await NOTES.delete('PURGE_HASHKEY')
     await NOTES.delete(failKey)
 
@@ -165,8 +172,13 @@ router.post('/purge', async (request) => {
             await Promise.all(markPromises)
             cursor = listResult.list_complete ? undefined : listResult.cursor
         } while (cursor)
+        
+        // 標記完成後清除 purge 狀態
+        await NOTES.delete('PURGE_STATUS')
     } catch (err) {
         console.error('Purge marking failed:', err)
+        // 發生錯誤時也要清除 purge 狀態
+        await NOTES.delete('PURGE_STATUS')
         return renderPurgePage(`<div class="message error">An error occurred while marking notes for deletion. Details: ${err.message}</div>`, '', '')
     }
     return renderPurgePage(`<div class="message success">Purge process initiated. ${markedCount} notes have been marked for deletion and will be removed shortly.</div>`, '', '')
