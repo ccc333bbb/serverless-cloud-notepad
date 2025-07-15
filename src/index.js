@@ -60,6 +60,12 @@ router.get('/purge-debug', () => {
     const now = dayjs()
     const utcKey = now.utc().format('YYYYMMDDHHMM')
     const localKey = now.format('YYYYMMDDHHMM')
+    
+    // Manual GMT+8 calculation
+    const utcTime = now.utc()
+    const gmt8Time = utcTime.add(8, 'hour')
+    const gmt8Key = gmt8Time.format('YYYYMMDDHHMM')
+    
     const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
     
     const html = `
@@ -79,7 +85,8 @@ router.get('/purge-debug', () => {
             <h1>Purge Key Debug</h1>
             <p><strong>UTC Key:</strong> <span class="key">${utcKey}</span></p>
             <p><strong>Local Key:</strong> <span class="key">${localKey}</span></p>
-            <p><strong>Shanghai Key:</strong> <span class="key">${shanghaiKey}</span></p>
+            <p><strong>GMT+8 Key (Manual):</strong> <span class="key">${gmt8Key}</span></p>
+            <p><strong>Shanghai Key (Plugin):</strong> <span class="key">${shanghaiKey}</span></p>
             <p><strong>Current UTC Time:</strong> ${now.utc().format('YYYY-MM-DD HH:mm:ss')}</p>
             <p><strong>Current Local Time:</strong> ${now.format('YYYY-MM-DD HH:mm:ss')}</p>
             <p><strong>Current Shanghai Time:</strong> ${now.tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}</p>
@@ -107,19 +114,25 @@ router.post('/purge', async (request) => {
     const formData = await request.formData()
     const userInput = formData.get('purgeKey')
     
-    // Generate current time-based keys
+    // Generate current time-based keys with manual GMT+8 calculation
     const now = dayjs()
     const utcKey = now.utc().format('YYYYMMDDHHMM')
     const localKey = now.format('YYYYMMDDHHMM')
-    const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
     
-    // Use Shanghai timezone as primary, UTC as fallback
-    const correctKey = shanghaiKey || utcKey
+    // Manual GMT+8 calculation (UTC + 8 hours)
+    const utcTime = now.utc()
+    const gmt8Time = utcTime.add(8, 'hour')
+    const gmt8Key = gmt8Time.format('YYYYMMDDHHMM')
+    
+    // Try timezone plugin first, fallback to manual calculation
+    const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    const correctKey = shanghaiKey || gmt8Key || utcKey
     
     console.log('Purge key debug:', {
         userInput,
         utcKey,
         localKey,
+        gmt8Key,
         shanghaiKey,
         correctKey,
         match: userInput === correctKey
