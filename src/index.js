@@ -56,6 +56,41 @@ router.get('/purge', () => {
     return renderPurgePage()
 })
 
+router.get('/purge-debug', () => {
+    const utcKey = dayjs.utc().format('YYYYMMDDHHMM')
+    const localKey = dayjs().format('YYYYMMDDHHMM')
+    const shanghaiKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Purge Debug</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            .container { max-width: 600px; margin: 0 auto; }
+            .key { font-family: monospace; font-size: 18px; padding: 10px; background: #f0f0f0; margin: 5px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Purge Key Debug</h1>
+            <p><strong>UTC Key:</strong> <span class="key">${utcKey}</span></p>
+            <p><strong>Local Key:</strong> <span class="key">${localKey}</span></p>
+            <p><strong>Shanghai Key:</strong> <span class="key">${shanghaiKey}</span></p>
+            <p><strong>Current UTC Time:</strong> ${dayjs.utc().format('YYYY-MM-DD HH:mm:ss')}</p>
+            <p><strong>Current Local Time:</strong> ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</p>
+            <p><strong>Current Shanghai Time:</strong> ${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}</p>
+            <hr>
+            <p><a href="/purge">Go to Purge Page</a></p>
+          </div>
+        </body>
+      </html>`
+    
+    return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } })
+})
+
 router.post('/purge', async (request) => {
     const ip = request.headers.get('cf-connecting-ip') || 'unknown'
     const lockKey = `PURGE_LOCK_${ip}`
@@ -70,7 +105,23 @@ router.post('/purge', async (request) => {
     // 2. Validate password
     const formData = await request.formData()
     const userInput = formData.get('purgeKey')
-    const correctKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    
+    // Try multiple timezone approaches for debugging
+    const utcKey = dayjs.utc().format('YYYYMMDDHHMM')
+    const localKey = dayjs().format('YYYYMMDDHHMM')
+    const shanghaiKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    
+    // Use UTC as fallback if timezone doesn't work
+    const correctKey = shanghaiKey || utcKey
+    
+    console.log('Purge key debug:', {
+        userInput,
+        utcKey,
+        localKey,
+        shanghaiKey,
+        correctKey,
+        match: userInput === correctKey
+    })
 
     if (userInput !== correctKey) {
         const failCount = parseInt(await NOTES.get(failKey) || '0') + 1
