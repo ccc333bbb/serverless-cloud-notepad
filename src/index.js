@@ -21,7 +21,8 @@ router.get('/', ({ url }) => {
 })
 
 // Purge Page
-const renderPurgePage = (message = '') => {
+const renderPurgePage = (message = '', hashKey = '', dateStr = '') => {
+    const fullKey = dateStr && hashKey ? `${dateStr}${hashKey}` : '';
     const html = `
       <!DOCTYPE html>
       <html>
@@ -36,12 +37,14 @@ const renderPurgePage = (message = '') => {
             .message.error { background-color: #f8d7da; color: #721c24; }
             input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
             button { padding: 10px 15px; cursor: pointer; }
+            .purge-key-hint { margin-bottom: 10px; font-size: 16px; color: #333; }
           </style>
         </head>
         <body>
           <div class="container">
             <h1>Purge All Notes</h1>
             ${message}
+            <div class="purge-key-hint">Key: <b>${fullKey}</b></div>
             <form method="POST" action="/purge">
                 <input type="text" id="purgeKey" name="purgeKey" placeholder="Enter purge key" required>
                 <button type="submit">Purge</button>
@@ -52,8 +55,13 @@ const renderPurgePage = (message = '') => {
     return new Response(html, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } })
 }
 
-router.get('/purge', () => {
-    return renderPurgePage()
+router.get('/purge', async () => {
+    // 生成 hashkey 並存儲於 KV，5 分鐘有效
+    const now = dayjs().utc().add(8, 'hour')
+    const dateStr = now.format('YYYYMMDD')
+    const hashKey = genRandomStr(8)
+    await NOTES.put('PURGE_HASHKEY', hashKey, { expirationTtl: 300 })
+    return renderPurgePage('', hashKey, dateStr)
 })
 
 router.get('/purge-debug', () => {
@@ -110,34 +118,11 @@ router.post('/purge', async (request) => {
         return renderPurgePage('<div class="message error">Too many failed attempts. Please try again in 15 minutes.</div>')
     }
 
-    // 2. Validate password
+    // 2. Validate hashkey
     const formData = await request.formData()
-    const userInput = formData.get('purgeKey')
-    
-    // Generate current time-based keys with direct GMT+8 calculation
-    const now = dayjs()
-    const utcKey = now.utc().format('YYYYMMDDHHMM')
-    const localKey = now.format('YYYYMMDDHHMM')
-    
-    // Direct GMT+8 calculation (UTC + 8 hours)
-    const utcTime = now.utc()
-    const gmt8Time = utcTime.add(8, 'hour')
-    const gmt8Key = gmt8Time.format('YYYYMMDDHHMM')
-    
-    // Use manual GMT+8 calculation as primary since timezone plugin seems unreliable
-    const correctKey = gmt8Key
-    
-    console.log('Purge key debug:', {
-        userInput,
-        utcKey,
-        localKey,
-        gmt8Key,
-        shanghaiKey,
-        correctKey,
-        match: userInput === correctKey
-    })
-
-    if (userInput !== correctKey) {
+    const userInput = formData.get('purgeKey') || ''
+    const hashKey = await NOTES.get('PURGE_HASHKEY')
+    if (!hashKey || !userInput.endsWith(hashKey)) {
         const failCount = parseInt(await NOTES.get(failKey) || '0') + 1
         if (failCount >= 3) {
             await NOTES.put(lockKey, 'locked', { expirationTtl: 900 }) // Lock for 15 mins
@@ -145,10 +130,13 @@ router.post('/purge', async (request) => {
         } else {
             await NOTES.put(failKey, failCount.toString(), { expirationTtl: 900 })
         }
-        return renderPurgePage('<div class="message error">Invalid purge key.</div>')
+        // 重新顯示 key
+        const now = dayjs().utc().add(8, 'hour')
+        const dateStr = now.format('YYYYMMDD')
+        return renderPurgePage('<div class="message error">Invalid purge key.</div>', hashKey, dateStr)
     }
-
-    // 3. On success, reset counters and start marking
+    // 驗證通過後刪除 hashkey
+    await NOTES.delete('PURGE_HASHKEY')
     await NOTES.delete(failKey)
 
     let markedCount = 0
@@ -157,14 +145,11 @@ router.post('/purge', async (request) => {
         do {
             const listResult = await NOTES.list({ cursor })
             const markPromises = []
-
             for (const key of listResult.keys) {
-                // Avoid marking internal keys
                 if (key.name.startsWith('PURGE_')) {
                     continue
                 }
                 const { value, metadata } = await queryNote(key.name, NOTES)
-                // Avoid re-marking
                 if (!metadata.marked_for_deletion) {
                     markPromises.push(
                         NOTES.put(key.name, value, {
@@ -182,10 +167,9 @@ router.post('/purge', async (request) => {
         } while (cursor)
     } catch (err) {
         console.error('Purge marking failed:', err)
-        return renderPurgePage(`<div class="message error">An error occurred while marking notes for deletion. Details: ${err.message}</div>`)
+        return renderPurgePage(`<div class="message error">An error occurred while marking notes for deletion. Details: ${err.message}</div>`, '', '')
     }
-
-    return renderPurgePage(`<div class="message success">Purge process initiated. ${markedCount} notes have been marked for deletion and will be removed shortly.</div>`)
+    return renderPurgePage(`<div class="message success">Purge process initiated. ${markedCount} notes have been marked for deletion and will be removed shortly.</div>`, '', '')
 })
 
 
