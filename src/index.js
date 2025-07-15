@@ -114,19 +114,18 @@ router.post('/purge', async (request) => {
     const formData = await request.formData()
     const userInput = formData.get('purgeKey')
     
-    // Generate current time-based keys with manual GMT+8 calculation
+    // Generate current time-based keys with direct GMT+8 calculation
     const now = dayjs()
     const utcKey = now.utc().format('YYYYMMDDHHMM')
     const localKey = now.format('YYYYMMDDHHMM')
     
-    // Manual GMT+8 calculation (UTC + 8 hours)
+    // Direct GMT+8 calculation (UTC + 8 hours)
     const utcTime = now.utc()
     const gmt8Time = utcTime.add(8, 'hour')
     const gmt8Key = gmt8Time.format('YYYYMMDDHHMM')
     
-    // Try timezone plugin first, fallback to manual calculation
-    const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
-    const correctKey = shanghaiKey || gmt8Key || utcKey
+    // Use manual GMT+8 calculation as primary since timezone plugin seems unreliable
+    const correctKey = gmt8Key
     
     console.log('Purge key debug:', {
         userInput,
