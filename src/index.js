@@ -57,9 +57,10 @@ router.get('/purge', () => {
 })
 
 router.get('/purge-debug', () => {
-    const utcKey = dayjs.utc().format('YYYYMMDDHHMM')
-    const localKey = dayjs().format('YYYYMMDDHHMM')
-    const shanghaiKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    const now = dayjs()
+    const utcKey = now.utc().format('YYYYMMDDHHMM')
+    const localKey = now.format('YYYYMMDDHHMM')
+    const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
     
     const html = `
       <!DOCTYPE html>
@@ -79,9 +80,9 @@ router.get('/purge-debug', () => {
             <p><strong>UTC Key:</strong> <span class="key">${utcKey}</span></p>
             <p><strong>Local Key:</strong> <span class="key">${localKey}</span></p>
             <p><strong>Shanghai Key:</strong> <span class="key">${shanghaiKey}</span></p>
-            <p><strong>Current UTC Time:</strong> ${dayjs.utc().format('YYYY-MM-DD HH:mm:ss')}</p>
-            <p><strong>Current Local Time:</strong> ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</p>
-            <p><strong>Current Shanghai Time:</strong> ${dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}</p>
+            <p><strong>Current UTC Time:</strong> ${now.utc().format('YYYY-MM-DD HH:mm:ss')}</p>
+            <p><strong>Current Local Time:</strong> ${now.format('YYYY-MM-DD HH:mm:ss')}</p>
+            <p><strong>Current Shanghai Time:</strong> ${now.tz('Asia/Shanghai').format('YYYY-MM-DD HH:mm:ss')}</p>
             <hr>
             <p><a href="/purge">Go to Purge Page</a></p>
           </div>
@@ -106,12 +107,13 @@ router.post('/purge', async (request) => {
     const formData = await request.formData()
     const userInput = formData.get('purgeKey')
     
-    // Try multiple timezone approaches for debugging
-    const utcKey = dayjs.utc().format('YYYYMMDDHHMM')
-    const localKey = dayjs().format('YYYYMMDDHHMM')
-    const shanghaiKey = dayjs().tz('Asia/Shanghai').format('YYYYMMDDHHMM')
+    // Generate current time-based keys
+    const now = dayjs()
+    const utcKey = now.utc().format('YYYYMMDDHHMM')
+    const localKey = now.format('YYYYMMDDHHMM')
+    const shanghaiKey = now.tz('Asia/Shanghai').format('YYYYMMDDHHMM')
     
-    // Use UTC as fallback if timezone doesn't work
+    // Use Shanghai timezone as primary, UTC as fallback
     const correctKey = shanghaiKey || utcKey
     
     console.log('Purge key debug:', {
